@@ -1,0 +1,29 @@
+name: powermoniter-main
+
+services:
+  web:
+    build: .
+    hostname: powermoniter-web-main
+    networks:
+      - mynet
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - .:/app
+      - /var/www/powermoniter-static:/app/staticfiles
+      - /var/www/powermoniter-media:/app/media
+    environment:
+      - DEBUG=False
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,81.68.79.234
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  mynet:
+    driver: bridge

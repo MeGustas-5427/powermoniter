@@ -10,6 +10,8 @@ from ninja import NinjaAPI
 
 from apps.api.errors import ApiError, api_error_handler
 from apps.api.routes.device_api import router as device_api_router
+from apps.api.routes.devices import router as device_admin_router
+from apps.api.routes.auth import router as auth_router
 
 api = NinjaAPI(
     title="Power Moniter API",
@@ -18,6 +20,8 @@ api = NinjaAPI(
 )
 api.add_exception_handler(ApiError, api_error_handler)
 api.add_router("/v1/devices", device_api_router)
+api.add_router("/v1/device-admin", device_admin_router)
+api.add_router("/v1/auth", auth_router)
 
 
 urlpatterns = [

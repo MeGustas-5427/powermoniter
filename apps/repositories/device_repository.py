@@ -37,7 +37,6 @@ class DeviceRepository:
             status=status,
             collect_enabled=collect_enabled,
             ingress_type=ingress_type,
-            ingress_config=ingress_config,
             description=description,
             broker=config.get("broker", ""),
             port=int(config.get("port", 0) or 0),
@@ -48,6 +47,7 @@ class DeviceRepository:
             password=config.get("password", ""),
             user_id=user_id,
         )
+        device.ingress_config = config
         return device
 
     @staticmethod
@@ -85,8 +85,8 @@ class DeviceRepository:
         if ingress_type is not None:
             device.ingress_type = ingress_type
         if ingress_config is not None:
-            device.ingress_config = ingress_config
             config = ingress_config or {}
+            device.ingress_config = config
             device.broker = config.get("broker", device.broker)
             device.port = int(config.get("port", device.port or 0) or 0)
             device.pub_topic = config.get("pub_topic", device.pub_topic)

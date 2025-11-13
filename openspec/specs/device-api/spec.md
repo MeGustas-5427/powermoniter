@@ -83,3 +83,66 @@ Test documentation MUST describe helper methods for JWT、固定当前时间以�
 - **WHEN** 在测试类中提供 `_make_token(user_id)`、`_freeze_now()`、`_create_reading()` 等函数并添加注释
 - **THEN** 所有用例都复用这些 helper，保证 token/时间/读数构造逻辑一致，降低重复代码
 
+### Requirement: Device admin APIs MUST use Django Ninja stack
+All endpoints previously implemented via FastAPI (`apps/api/routes/devices.py`) MUST be reimplemented with `ninja.Router`, `JWTAuth`, `ApiError`, and `observe_device_api` so they share the same auth/telemetry contract as `device_api`.
+
+#### Scenario: Router uses shared middleware
+- **GIVEN** a request hits `/v1/device-admin/macs`
+- **WHEN** code handles create/list/update
+- **THEN** the view is protected by `JWTAuth`, errors propagate through `ApiError`, and metrics log via `observe_device_api`
+
+### Requirement: Create/List/Update MUST reuse repository + schemas
+Device CRUD APIs MUST delegate to `DeviceRepository` and return the existing `DeviceResponse` / `DeviceListResponse` schemas so clients receive consistent payloads.
+
+#### Scenario: Create device with unique MAC
+- **WHEN** caller POSTs a new MAC
+- **THEN** repository `create_device` is invoked, `subscription_manager.apply_device` runs, and the response body equals `DeviceResponse.from_model(...)`
+
+#### Scenario: Conflict handled gracefully
+- **WHEN** MAC already exists
+- **THEN** API raises `ApiError("DEVICE_CONFLICT", ..., 409)` (exact code TBD) using unified error schema rather than FastAPI `HTTPException`
+
+#### Scenario: List devices filtered by status
+- **WHEN** GET `/macs?status=enabled`
+- **THEN** repository `list_devices(status=...)` result is mapped to `DeviceListResponse`, preserving `total`
+
+#### Scenario: Update device applies subscription change
+- **WHEN** PATCH `/macs/{mac}` succeeds
+- **THEN** repository `update_device` result is returned via schema and `subscription_manager.apply_device` is called
+
+### Requirement: Django tests MUST cover new routes
+Automated tests MUST live under `apps/api/routes/tests/` and exercise happy paths plus 401/404/409 branches for the device admin router.
+
+#### Scenario: Create/list/update tests
+- **GIVEN** JWT helper + repo fixtures
+- **WHEN** tests hit the new Ninja endpoints
+- **THEN** they assert schema payloads, subscription manager invocation (can be patched), and error codes for conflict/not-found/unauthorized cases
+
+### Requirement: Document `/v1/devices` endpoint
+Documentation MUST describe the list endpoint with URL, method, query parameters (`page`, `page_size`, `status`), and the response schema (`DeviceListResponse`).
+
+#### Scenario: FE reads list API doc
+- **WHEN** developer checks `docs/api/device-api.md`
+- **THEN** they see pagination rules (default 20, max 100), status filter options (`online/offline/maintenance/all`), sample response with `items/total/page/page_size`
+
+### Requirement: Document `/v1/devices/{device_id}/electricity`
+Docs MUST cover the electricity endpoint, including path parameter `device_id`, query `window` options (24h/7d/30d), point structure (`timestamp`, `power_kw`, etc.), and interval labels (`pt5m/pt30m/pt120m`).
+
+#### Scenario: FE implements electricity chart
+- **WHEN** FE references doc
+- **THEN** they find window choices, explanation of buckets, sample response showing `points` and `interval`
+
+### Requirement: Error codes + auth info
+Docs MUST list relevant error codes (`UNAUTHORIZED`, `DEVICE_NOT_FOUND`, `INVALID_TIME_RANGE`, etc.) with HTTP status and meaning, and remind clients to send `Authorization: Bearer <token>` header.
+
+#### Scenario: QA tests failures
+- **WHEN** doc is consulted
+- **THEN** it presents an error table and mentions JWT requirements so QA can simulate 401/404/400 cases
+
+### Requirement: Provide usage examples
+Docs MUST include cURL and JavaScript examples for both endpoints, demonstrating pagination, status filter, window usage, and headers.
+
+#### Scenario: Developer copy-pastes sample
+- **WHEN** they copy JS/cURL snippets
+- **THEN** requests include `Authorization` header, query params, and parse responses as shown
+

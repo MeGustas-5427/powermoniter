@@ -115,6 +115,32 @@ class Device(models.Model):
         app_label = "repositories"
         db_table = "device"
 
+    def _default_ingress_config(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "location": self.location,
+            "broker": self.broker,
+            "port": self.port,
+            "pub_topic": self.pub_topic,
+            "sub_topic": self.sub_topic,
+            "topic": self.sub_topic,
+            "client_id": self.client_id,
+            "username": self.username,
+            "password": self.password,
+        }
+
+    @property
+    def ingress_config(self) -> dict[str, object]:
+        cached = getattr(self, "_ingress_config_cache", None)
+        if cached is None:
+            cached = self._default_ingress_config()
+            self._ingress_config_cache = cached
+        return cached
+
+    @ingress_config.setter
+    def ingress_config(self, value: dict[str, object] | None) -> None:
+        self._ingress_config_cache = value or {}
+
 
 class Reading(models.Model):
     """用电量读数实体，记录幂等信息。"""
