@@ -15,7 +15,3 @@ dependencies = [
     "sentry-sdk[django]>=2.43.0",
     "uvicorn[standard]>=0.38.0",
 ]
-
-
-[tool.uv.scripts]
-post_lock = "uv export --no-hashes --no-header --no-annotate --no-dev --format requirements.txt > requirements.txt"
