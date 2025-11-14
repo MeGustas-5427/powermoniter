@@ -1,0 +1,15 @@
+services:
+  caddy:
+    image: caddy
+    ports: ["80:80","443:443", "8000:8000"]
+    networks: ["edge"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+networks:
+  edge:
+    external: true
+volumes:
+  caddy-data:
+  caddy-config:
