@@ -5,7 +5,7 @@ services:
     networks: ["edge"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - /root/powermoniter/staticfiles:/srv/static:ro
+      - /root/powermoniter/staticfiles:/srv/staticfiles:ro
       - /root/powermoniter/media:/srv/media:ro
 networks:
   edge:
