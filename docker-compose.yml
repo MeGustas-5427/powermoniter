@@ -15,9 +15,9 @@ services:
       - "8000"    # 只在 Docker 网络内部暴露
     volumes:
       - .:/app
-      - ./powermoniter-static:/app/staticfiles
-      - ./powermoniter-media:/app/media
-      - /var/log/powermoniter:/app/logs
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+      - ./logs:/app/logs
     environment:
       - DEBUG=False
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,81.68.79.234
