@@ -82,8 +82,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # 复制应用代码
 COPY . .
 
-# 创建必要的目录
-RUN mkdir -p /app/logs /app/media /app/staticfiles
+# ✅ 创建必要的目录和文件
+RUN mkdir -p /app/logs /app/media /app/staticfiles && \
+    touch /app/logs/django.log && \
+    chmod -R 777 /app/logs
 
 # 设置权限
 RUN chown -R django:django /app
