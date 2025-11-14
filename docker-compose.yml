@@ -4,13 +4,12 @@ services:
   web:
     build: .
     hostname: powermoniter-web-main
-    networks:
-      - mynet
+    networks: ["edge"]
     dns:
       - 8.8.8.8
       - 1.1.1.1
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - .:/app
       - /var/www/powermoniter-static:/app/staticfiles
@@ -25,5 +24,5 @@ services:
         max-file: "3"
 
 networks:
-  mynet:
-    driver: bridge
+  edge:
+    external: true
