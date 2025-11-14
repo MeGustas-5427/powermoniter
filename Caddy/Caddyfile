@@ -6,14 +6,14 @@
     # 静态文件处理
     handle /static/* {
         uri strip_prefix /static
-        root * /root/powermoniter/staticfiles
+        root * /srv/staticfiles
         file_server
     }
 
     # 媒体文件处理
     handle /media/* {
         uri strip_prefix /media
-        root * /root/powermoniter/media
+        root * /srv/media
         file_server
     }
 
