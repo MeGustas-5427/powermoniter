@@ -30,22 +30,13 @@ class ApiCsrfExemptMiddleware(MiddlewareMixin):
         """检查请求是否应该豁免CSRF"""
         path = request.path_info.lstrip('/')
 
-        # 打印调试信息
-        print(f"🔍 CSRF检查路径: {path}")
-
-        # 检查是否匹配豁免URL
-        logger.debug("CSRF check entry: %s %s", request.method, path)
-
         # 匹配豁免URL
         for url_pattern in self.exempt_urls:
             if url_pattern.match(path):
                 # 标记为豁免CSRF
                 setattr(request, '_dont_enforce_csrf_checks', True)
-                print(f"✅ CSRF豁免生效: {path}")
-                logger.info("CSRF豁免命中: %s (pattern=%s)", path, url_pattern.pattern)
                 break
         else:
-            print(f"❌ CSRF豁免未匹配: {path}")
             logger.info("CSRF保护启用: %s", path)
 
         return None
@@ -59,10 +50,7 @@ class SmartCsrfViewMiddleware(CsrfViewMiddleware):
     def process_view(self, request, callback, callback_args, callback_kwargs):
         # 如果请求已被标记为豁免，跳过CSRF检查
         if getattr(request, '_dont_enforce_csrf_checks', False):
-            logger.debug("跳过CSRF校验: %s %s", request.method, request.path)
             return None
-
         # 否则执行正常的CSRF检查
-        logger.debug("执行CSRF校验: %s %s", request.method, request.path)
         # 其他请求仍交给默认的CSRF校验
         return super().process_view(request, callback, callback_args, callback_kwargs)
