@@ -267,7 +267,7 @@ CSRF_EXEMPT_URLS = [
 ]
 
 # CSRF Cookie设置 - 适配HTTPS和前后端分离
-CSRF_COOKIE_SECURE = True  # 仅在HTTPS下传输
+CSRF_COOKIE_SECURE = False  # 仅在HTTPS下传输
 CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript访问（前端可能需要）
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_USE_SESSIONS = False  # 使用cookie而不是session存储CSRF token
