@@ -18,7 +18,7 @@
     }
 
     # 其他请求转发到Django
-    reverse_proxy 127.0.0.1:8000 {
+    reverse_proxy powermoniter-main-web:8000 {
         header_up Host {http.request.host}       # 设置Host头部
         header_up X-Real-IP {remote_host}        # 客户端真实IP
         header_up X-Forwarded-For {remote_host}  # 转发链IP

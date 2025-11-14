@@ -8,8 +8,8 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
-    ports:
-      - "127.0.0.1:8000:8000"
+    expose:
+      - "8000"    # 只在 Docker 网络内部暴露
     volumes:
       - .:/app
       - /var/www/powermoniter-static:/app/staticfiles
@@ -23,6 +23,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-networks:
+networks:  # docker network create edge
   edge:
     external: true
