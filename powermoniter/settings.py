@@ -243,20 +243,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS设置
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:9000",
-    "http://127.0.0.1:9000",
-    "http://localhost:8888",
-    "http://127.0.0.1:8888",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF设置 - 前后端分离友好配置
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:9000",
-    "http://127.0.0.1:9000",
-    "http://localhost:8888",
-    "http://127.0.0.1:8888",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 # API接口CSRF豁免URL模式
