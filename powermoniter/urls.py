@@ -26,4 +26,5 @@ api.add_router("api/v1/auth", auth_router)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("", api.urls),
 ]
