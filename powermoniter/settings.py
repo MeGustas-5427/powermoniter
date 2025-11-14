@@ -84,12 +84,13 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # 启用CORS中间件
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'utils.middleware.ConditionalSessionMiddleware',  # 条件性Session，仅Admin使用
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'utils.csrf_middleware.ApiCsrfExemptMiddleware',  # API CSRF豁免
+    'utils.csrf_middleware.SmartCsrfViewMiddleware',  # 智能CSRF保护（admin等需要）
+    'utils.middleware.ConditionalAuthMiddleware',  # 条件性认证，仅Admin使用
+    'utils.middleware.ConditionalMessageMiddleware',  # 条件性消息，仅Admin使用
+    # 'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'powermoniter.urls'
@@ -269,11 +270,6 @@ CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript访问（前端可能需要）
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_USE_SESSIONS = False  # 使用cookie而不是session存储CSRF token
 
-# Session配置 - 已移除，使用JWT认证
-# SESSION_COOKIE_SECURE = True
-# SESSION_COOKIE_HTTPONLY = True
-# SESSION_COOKIE_SAMESITE = 'Lax'
-# SESSION_COOKIE_AGE = 86400  # 24小时
 
 # 代理相关设置 - 适配Caddy反向代理
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
