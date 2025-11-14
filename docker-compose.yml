@@ -4,7 +4,10 @@ services:
   web:
     build: .
     hostname: powermoniter-web-main
-    networks: ["edge"]
+    networks:
+      edge:
+        aliases:
+          - powermoniter-main-web
     dns:
       - 8.8.8.8
       - 1.1.1.1
