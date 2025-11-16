@@ -36,7 +36,7 @@ class DeviceApiElectricityTests(TestCase):
         self._create_reading(self.device, recent_ts2, energy_kwh=Decimal("10.7"), power=Decimal("1.6"), voltage=Decimal("221.2"), current=Decimal("1.6"))
         self._create_reading(self.device, recent_ts, energy_kwh=Decimal("11.2"), power=Decimal("1.7"), voltage=Decimal("221.3"), current=Decimal("1.7"))
 
-        with self._freeze_now(), self._patch_postgres_aggregator():
+        with self._freeze_now():
             response = self.client.get(
                 f"/api/v1/devices/{self.device.id}/electricity",
                 {"window": "24h"},
@@ -49,30 +49,39 @@ class DeviceApiElectricityTests(TestCase):
         a = {
             'success': True,
             'data': {
-                'device_id': '019a8bc3-ce15-7015-9359-f715f08dffb6',
-                'start_time': '2024-12-25T12:00:00Z',
+                'device_id': '019a8c01-2285-7037-89c0-1f2692558a32',
+                'start_time': '2024-12-31T12:00:00Z',
                 'end_time': '2025-01-01T12:00:00Z',
-                'interval': 'pt30m',
+                'interval': 'pt5m',
                 'points': [
                     {
                         'timestamp': '2025-01-01T11:00:00Z',
+                        'power_kw': 0.4,
+                        'energy_kwh': 0.0,
+                        'voltage_v': 220.0,
+                        'current_a': 1.0
+                    }, {
+                        'timestamp': '2025-01-01T11:25:00Z',
                         'power_kw': 1.4,
                         'energy_kwh': 0.2,
                         'voltage_v': 221.1,
                         'current_a': 1.4
                     }, {
-                        'timestamp': '2025-01-01T11:30:00Z',
+                        'timestamp': '2025-01-01T11:50:00Z',
+                        'power_kw': 1.6,
+                        'energy_kwh': 0.5,
+                        'voltage_v': 221.2,
+                        'current_a': 1.6
+                    }, {
+                        'timestamp': '2025-01-01T11:55:00Z',
                         'power_kw': 1.7,
-                        'energy_kwh': 1.0,
+                        'energy_kwh': 0.5,
                         'voltage_v': 221.3,
                         'current_a': 1.7
                     }
                 ]
             }
         }
-
-
-
 
         self.assertTrue(body["success"])
         data = body["data"]
@@ -91,14 +100,14 @@ class DeviceApiElectricityTests(TestCase):
         ts = self.fixed_now - timedelta(hours=2)
         self._create_reading(self.device, ts, energy_kwh=Decimal("5.0"), power=Decimal("0.8"), voltage=Decimal("219.0"), current=Decimal("0.8"))
 
-        with self._freeze_now(), self._patch_postgres_aggregator():
+        with self._freeze_now():
             resp_7d = self.client.get(
                 f"/api/v1/devices/{self.device.id}/electricity",
                 {"window": "7d"},
                 **self._auth_headers(self.user),
             )
 
-        with self._freeze_now(), self._patch_postgres_aggregator():
+        with self._freeze_now():
             resp_30d = self.client.get(
                 f"/api/v1/devices/{self.device.id}/electricity",
                 {"window": "30d"},
@@ -153,22 +162,6 @@ class DeviceApiElectricityTests(TestCase):
 
     def _freeze_now(self) -> patch:
         return patch("apps.api.routes.device_api.DeviceApiService._now", return_value=self.fixed_now)
-
-    def _patch_postgres_aggregator(self) -> patch:
-        async def _fake_aggregate(*, device_id, start_utc, end_utc, bucket_count, bucket_seconds, config):
-            baseline, readings = await DeviceApiService._get_readings_with_baseline(device_id, start_utc, end_utc)
-            return DeviceApiService._build_buckets(
-                start_utc,
-                config.bucket,
-                bucket_count,
-                readings,
-                baseline_energy=baseline,
-            )
-
-        return patch(
-            "apps.api.routes.device_api.DeviceApiService._aggregate_buckets_postgres",
-            side_effect=_fake_aggregate,
-        )
 
     @staticmethod
     def _iso(value: datetime) -> str:

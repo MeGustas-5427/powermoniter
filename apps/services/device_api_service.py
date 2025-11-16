@@ -141,28 +141,14 @@ class DeviceApiService:
         bucket_seconds = int(config.bucket.total_seconds())
         bucket_count = int(config.duration.total_seconds() // bucket_seconds)
 
-        if connection.vendor == "postgresql":
-            buckets = await cls._aggregate_buckets_postgres(
-                device_id=device.id,
-                start_utc=start_utc,
-                end_utc=end_utc,
-                bucket_count=bucket_count,
-                bucket_seconds=bucket_seconds,
-                config=config,
-            )
-        else:
-            baseline, readings = await cls._get_readings_with_baseline(
-                device.id,
-                start_utc,
-                end_utc,
-            )
-            buckets = cls._build_buckets(
-                start_utc,
-                config.bucket,
-                bucket_count,
-                readings,
-                baseline_energy=baseline,
-            )
+        buckets = await cls._aggregate_buckets_postgres(
+            device_id=device.id,
+            start_utc=start_utc,
+            end_utc=end_utc,
+            bucket_count=bucket_count,
+            bucket_seconds=bucket_seconds,
+            config=config,
+        )
 
         points = [
             ElectricityPoint(
@@ -198,43 +184,6 @@ class DeviceApiService:
             "voltage",
             "current",
         ))
-
-    @classmethod
-    @sync_to_async
-    def _get_readings_with_baseline(
-        cls,
-        device_id: str,
-        start_utc: datetime,
-        end_utc: datetime,
-    ) -> tuple[Decimal | None, List[dict[str, Any]]]:
-        """
-        获取窗口内读数，并附带窗口前一条作为基线，便于跨桶差分能耗。
-        """
-        readings = list(
-            Reading.objects.filter(
-                device_id=device_id,
-                ts__gte=start_utc,
-                ts__lte=end_utc,
-            )
-            .order_by("ts")
-            .values(
-                "ts",
-                "energy_kwh",
-                "power",
-                "voltage",
-                "current",
-            )
-        )
-        baseline_row = (
-            Reading.objects.filter(device_id=device_id, ts__lt=start_utc)
-            .order_by("-ts")
-            .values("energy_kwh")
-            .first()
-        )
-        baseline = None
-        if baseline_row and baseline_row.get("energy_kwh") is not None:
-            baseline = Decimal(str(baseline_row["energy_kwh"]))
-        return baseline, readings
 
     @classmethod
     async def _fetch_last_seen(cls, device_ids: Sequence[UUID]) -> Dict[UUID, datetime]:
@@ -296,69 +245,6 @@ class DeviceApiService:
             "current": 0.0,
             "energy": 0.0,
         }
-
-    @classmethod
-    def _build_buckets(
-        cls,
-        start: datetime,
-        bucket: timedelta,
-        bucket_count: int,
-        readings: Sequence[dict],
-        baseline_energy: Decimal | None = None,
-    ) -> List[tuple[datetime, Dict[str, object]]]:
-        # Step 1: 统一转换到 UTC，确保所有时间戳基准一致
-        start = cls._ensure_utc(start)
-        bucket_seconds = int(bucket.total_seconds())
-        buckets: List[tuple[datetime, Dict[str, float | int | Decimal]]] = []
-        # Step 2: 预生成每个桶并初始化累加器，后续循环无需再判空
-        for index in range(bucket_count):
-            bucket_ts = start + index * bucket
-            buckets.append(
-                (
-                    bucket_ts,
-                    {
-                        "count": 0,
-                        "power": 0.0,
-                        "voltage": 0.0,
-                        "current": 0.0,
-                        "energy": 0.0,
-                        "last_power": None,
-                        "last_voltage": None,
-                        "last_current": None,
-                    },
-                )
-            )
-
-        # Step 3: 遍历读数，按时间差定位桶下标并记录最新读数/能量边界
-        prev_energy: Decimal | None = baseline_energy
-        for reading in readings:
-            ts = cls._ensure_utc(reading["ts"])
-            delta = ts - start
-            idx = int(delta.total_seconds() // bucket_seconds)
-            if idx < 0 or idx >= len(buckets):
-                continue
-            bucket_stats = buckets[idx][1]
-            bucket_stats["count"] += 1
-            bucket_stats["last_power"] = float(reading.get("power") or 0.0)
-            bucket_stats["last_voltage"] = float(reading.get("voltage") or 0.0)
-            bucket_stats["last_current"] = float(reading.get("current") or 0.0)
-            energy_value = Decimal(reading.get("energy_kwh") or 0)
-            if prev_energy is not None:
-                delta_energy = energy_value - prev_energy
-                if delta_energy >= 0:
-                    bucket_stats["energy"] += float(delta_energy)
-            prev_energy = energy_value
-
-        # Step 4: 生成最终点位数据，瞬时值取桶内最新读数，energy 取最后-最初
-        for _, stats in buckets:
-            count = stats["count"]
-            if count:
-                stats["power"] = float(stats.get("last_power") or 0.0)
-                stats["voltage"] = float(stats.get("last_voltage") or 0.0)
-                stats["current"] = float(stats.get("last_current") or 0.0)
-            else:
-                stats["power"] = stats["voltage"] = stats["current"] = stats["energy"] = 0.0
-        return buckets
 
     @classmethod
     async def _aggregate_buckets_postgres(
@@ -433,7 +319,6 @@ class DeviceApiService:
             "bucket_count": bucket_count,
         }
         rows = await sync_to_async(cls._run_bucket_query, thread_sensitive=True)(sql, params)
-
         bucket_map: Dict[int, Dict[str, float | int]] = {}
         for row in rows:
             idx = row.get("bucket_index")
@@ -460,4 +345,5 @@ class DeviceApiService:
         with connection.cursor() as cursor:
             cursor.execute(sql, params)
             columns = [col[0] for col in cursor.description]
+            # columns = ['bucket_index', 'count', 'last_power', 'last_voltage', 'last_current', 'energy']
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
