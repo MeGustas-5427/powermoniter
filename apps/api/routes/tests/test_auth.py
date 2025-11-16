@@ -14,7 +14,6 @@ from apps.services.auth_service import (
 )
 
 
-@override_settings(ROOT_URLCONF="apps.api.routes.tests.urls")
 class AuthRoutesTests(TestCase):
     """Tests for /v1/auth/login endpoint."""
 
@@ -27,7 +26,7 @@ class AuthRoutesTests(TestCase):
         mock_result = LoginResult(token="token-123", expires_at=self.expires_at, user=self.user)
         with patch("apps.api.routes.auth.AuthService.login", new=AsyncMock(return_value=mock_result)):
             response = self.client.post(
-                "/v1/auth/login",
+                "/api/v1/auth/login",
                 data=json.dumps({"username": "alice", "password": "secret"}),
                 content_type="application/json",
             )
@@ -45,7 +44,7 @@ class AuthRoutesTests(TestCase):
             new=AsyncMock(side_effect=AccountLockedError),
         ):
             response = self.client.post(
-                "/v1/auth/login",
+                "/api/v1/auth/login",
                 data=json.dumps({"username": "alice", "password": "secret"}),
                 content_type="application/json",
             )
@@ -59,7 +58,7 @@ class AuthRoutesTests(TestCase):
             new=AsyncMock(side_effect=InvalidCredentialsError),
         ):
             response = self.client.post(
-                "/v1/auth/login",
+                "/api/v1/auth/login",
                 data=json.dumps({"username": "alice", "password": "invalid123"}),
                 content_type="application/json",
             )

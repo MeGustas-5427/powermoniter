@@ -13,7 +13,6 @@ from apps.services.auth_service import JWT_ALGORITHM
 from apps.services.device_api_service import DeviceApiService
 
 
-@override_settings(ROOT_URLCONF="apps.api.routes.tests.urls")
 class DeviceApiElectricityTests(TestCase):
     """覆盖 /v1/devices/{id}/electricity 的 Django 测试。"""
 
@@ -28,12 +27,18 @@ class DeviceApiElectricityTests(TestCase):
     def test_get_device_electricity_returns_points_for_24h_window(self) -> None:
         older_ts = self.fixed_now - timedelta(hours=1)
         recent_ts = self.fixed_now - timedelta(minutes=5)
+        recent_ts2 = self.fixed_now - timedelta(minutes=6)
+        recent_ts3 = self.fixed_now - timedelta(minutes=7)
+        recent_ts4 = self.fixed_now - timedelta(minutes=31)
         self._create_reading(self.device, older_ts, energy_kwh=Decimal("10.0"), power=Decimal("0.4"), voltage=Decimal("220.0"), current=Decimal("1.0"))
-        self._create_reading(self.device, recent_ts, energy_kwh=Decimal("11.2"), power=Decimal("1.5"), voltage=Decimal("221.0"), current=Decimal("1.5"))
+        self._create_reading(self.device, recent_ts4, energy_kwh=Decimal("10.2"), power=Decimal("1.4"), voltage=Decimal("221.1"), current=Decimal("1.4"))
+        self._create_reading(self.device, recent_ts3, energy_kwh=Decimal("10.4"), power=Decimal("1.5"), voltage=Decimal("221.1"), current=Decimal("1.5"))
+        self._create_reading(self.device, recent_ts2, energy_kwh=Decimal("10.7"), power=Decimal("1.6"), voltage=Decimal("221.2"), current=Decimal("1.6"))
+        self._create_reading(self.device, recent_ts, energy_kwh=Decimal("11.2"), power=Decimal("1.7"), voltage=Decimal("221.3"), current=Decimal("1.7"))
 
         with self._freeze_now(), self._patch_postgres_aggregator():
             response = self.client.get(
-                f"/v1/devices/{self.device.id}/electricity",
+                f"/api/v1/devices/{self.device.id}/electricity",
                 {"window": "24h"},
                 **self._auth_headers(self.user),
             )
@@ -41,18 +46,46 @@ class DeviceApiElectricityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         print(body)
+        a = {
+            'success': True,
+            'data': {
+                'device_id': '019a8bc3-ce15-7015-9359-f715f08dffb6',
+                'start_time': '2024-12-25T12:00:00Z',
+                'end_time': '2025-01-01T12:00:00Z',
+                'interval': 'pt30m',
+                'points': [
+                    {
+                        'timestamp': '2025-01-01T11:00:00Z',
+                        'power_kw': 1.4,
+                        'energy_kwh': 0.2,
+                        'voltage_v': 221.1,
+                        'current_a': 1.4
+                    }, {
+                        'timestamp': '2025-01-01T11:30:00Z',
+                        'power_kw': 1.7,
+                        'energy_kwh': 1.0,
+                        'voltage_v': 221.3,
+                        'current_a': 1.7
+                    }
+                ]
+            }
+        }
+
+
+
+
         self.assertTrue(body["success"])
         data = body["data"]
         self.assertEqual(data["device_id"], str(self.device.id))
         self.assertEqual(data["interval"], "pt5m")
         self.assertEqual(data["start_time"], self._iso(self.fixed_now - timedelta(hours=24)))
         self.assertEqual(data["end_time"], self._iso(self.fixed_now))
-        self.assertEqual(len(data["points"]), 2)
-        first_point, second_point = data["points"]
+        self.assertEqual(len(data["points"]), 4)
+        first_point, _, _, second_point = data["points"]
         self.assertEqual(first_point["timestamp"], self._iso(older_ts.replace(second=0, microsecond=0)))
         self.assertEqual(second_point["timestamp"], self._iso(recent_ts.replace(second=0, microsecond=0)))
         self.assertAlmostEqual(first_point["power_kw"], 0.4, places=2)
-        self.assertAlmostEqual(second_point["power_kw"], 1.5, places=2)
+        self.assertAlmostEqual(second_point["power_kw"], 1.7, places=2)
 
     def test_get_device_electricity_respects_all_windows(self) -> None:
         ts = self.fixed_now - timedelta(hours=2)
@@ -60,14 +93,14 @@ class DeviceApiElectricityTests(TestCase):
 
         with self._freeze_now(), self._patch_postgres_aggregator():
             resp_7d = self.client.get(
-                f"/v1/devices/{self.device.id}/electricity",
+                f"/api/v1/devices/{self.device.id}/electricity",
                 {"window": "7d"},
                 **self._auth_headers(self.user),
             )
 
         with self._freeze_now(), self._patch_postgres_aggregator():
             resp_30d = self.client.get(
-                f"/v1/devices/{self.device.id}/electricity",
+                f"/api/v1/devices/{self.device.id}/electricity",
                 {"window": "30d"},
                 **self._auth_headers(self.user),
             )
@@ -85,7 +118,7 @@ class DeviceApiElectricityTests(TestCase):
         foreign_device = self._create_device("Foreign", "BB0000000002", user=stranger)
 
         response = self.client.get(
-            f"/v1/devices/{foreign_device.id}/electricity",
+            f"/api/v1/devices/{foreign_device.id}/electricity",
             {"window": "24h"},
             **self._auth_headers(self.user),
         )
@@ -95,7 +128,7 @@ class DeviceApiElectricityTests(TestCase):
 
     def test_get_device_electricity_rejects_invalid_window(self) -> None:
         response = self.client.get(
-            f"/v1/devices/{self.device.id}/electricity",
+            f"/api/v1/devices/{self.device.id}/electricity",
             {"window": "oops"},
             **self._auth_headers(self.user),
         )
@@ -104,7 +137,7 @@ class DeviceApiElectricityTests(TestCase):
         self.assertEqual(response.json()["error_code"], "INVALID_TIME_RANGE")
 
     def test_get_device_electricity_requires_authorization_header(self) -> None:
-        response = self.client.get(f"/v1/devices/{self.device.id}/electricity")
+        response = self.client.get(f"/api/v1/devices/{self.device.id}/electricity")
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json().get("detail"), "Unauthorized")
@@ -123,8 +156,14 @@ class DeviceApiElectricityTests(TestCase):
 
     def _patch_postgres_aggregator(self) -> patch:
         async def _fake_aggregate(*, device_id, start_utc, end_utc, bucket_count, bucket_seconds, config):
-            readings = await DeviceApiService._get_readings_by_device_id(device_id, start_utc, end_utc)
-            return DeviceApiService._build_buckets(start_utc, config.bucket, bucket_count, readings)
+            baseline, readings = await DeviceApiService._get_readings_with_baseline(device_id, start_utc, end_utc)
+            return DeviceApiService._build_buckets(
+                start_utc,
+                config.bucket,
+                bucket_count,
+                readings,
+                baseline_energy=baseline,
+            )
 
         return patch(
             "apps.api.routes.device_api.DeviceApiService._aggregate_buckets_postgres",

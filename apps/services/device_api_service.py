@@ -52,11 +52,11 @@ class DeviceApiService:
     设计约定：
     1. 所有输入都转换为 UTC，以保证 bucket 计算一致
     2. 设备列表：一次性查询+本地过滤，避免分页跨状态抖动
-    3. 能耗曲线：窗口长度固定 (24h/7d/30d)，并映射为 5m/15m/60m 桶
+    3. 能耗曲线：窗口长度固定 (24h/7d/30d)，并映射为 5m/30m/120m 桶
     4. service 不关心鉴权/响应包装，仅返回 Pydantic Schema 所需数据
     """
 
-    _ONLINE_THRESHOLD = timedelta(minutes=10)
+    _ONLINE_THRESHOLD = timedelta(minutes=7)
     _WINDOW_CONFIG: Dict[DeviceWindow, WindowConfig] = {
         DeviceWindow.LAST_24H: WindowConfig(duration=timedelta(hours=24), bucket=timedelta(minutes=5), interval_label="pt5m"),
         DeviceWindow.LAST_7D: WindowConfig(duration=timedelta(days=7), bucket=timedelta(minutes=30), interval_label="pt30m"),
@@ -70,9 +70,10 @@ class DeviceApiService:
         :param user_id: 用户uuid
         :param status_filter: 设备状态条件过滤器，根据前端指定的设备状态，譬如：在线状态；返回全部在线状态的设备
         :param params: 分页器
+        判断设备当前状态的依据：根据最近一条Reading数据的时间与当前时间相差是否少于_ONLINE_THRESHOLD
         :return:
         """
-        devices = await cls._get_devices_by_user_id(user_id=user_id)
+        devices:List[Device] = await cls._get_devices_by_user_id(user_id=user_id)
         device_ids = [device.id for device in devices]
         # 预先把所有设备的 last_seen 映射成 dict，避免对单个设备重复 hitting DB
         last_seen_map = await cls._fetch_last_seen(device_ids)
@@ -131,7 +132,7 @@ class DeviceApiService:
         except Device.DoesNotExist:
             raise DeviceNotFoundError
 
-        config = cls._WINDOW_CONFIG.get(window)
+        config: WindowConfig = cls._WINDOW_CONFIG.get(window)
         if config is None:
             raise InvalidTimeRangeError
 
@@ -150,8 +151,18 @@ class DeviceApiService:
                 config=config,
             )
         else:
-            readings = await cls._get_readings_by_device_id(device.id, start_utc, end_utc)
-            buckets = cls._build_buckets(start_utc, config.bucket, bucket_count, readings)
+            baseline, readings = await cls._get_readings_with_baseline(
+                device.id,
+                start_utc,
+                end_utc,
+            )
+            buckets = cls._build_buckets(
+                start_utc,
+                config.bucket,
+                bucket_count,
+                readings,
+                baseline_energy=baseline,
+            )
 
         points = [
             ElectricityPoint(
@@ -187,6 +198,43 @@ class DeviceApiService:
             "voltage",
             "current",
         ))
+
+    @classmethod
+    @sync_to_async
+    def _get_readings_with_baseline(
+        cls,
+        device_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> tuple[Decimal | None, List[dict[str, Any]]]:
+        """
+        获取窗口内读数，并附带窗口前一条作为基线，便于跨桶差分能耗。
+        """
+        readings = list(
+            Reading.objects.filter(
+                device_id=device_id,
+                ts__gte=start_utc,
+                ts__lte=end_utc,
+            )
+            .order_by("ts")
+            .values(
+                "ts",
+                "energy_kwh",
+                "power",
+                "voltage",
+                "current",
+            )
+        )
+        baseline_row = (
+            Reading.objects.filter(device_id=device_id, ts__lt=start_utc)
+            .order_by("-ts")
+            .values("energy_kwh")
+            .first()
+        )
+        baseline = None
+        if baseline_row and baseline_row.get("energy_kwh") is not None:
+            baseline = Decimal(str(baseline_row["energy_kwh"]))
+        return baseline, readings
 
     @classmethod
     async def _fetch_last_seen(cls, device_ids: Sequence[UUID]) -> Dict[UUID, datetime]:
@@ -256,6 +304,7 @@ class DeviceApiService:
         bucket: timedelta,
         bucket_count: int,
         readings: Sequence[dict],
+        baseline_energy: Decimal | None = None,
     ) -> List[tuple[datetime, Dict[str, object]]]:
         # Step 1: 统一转换到 UTC，确保所有时间戳基准一致
         start = cls._ensure_utc(start)
@@ -276,13 +325,12 @@ class DeviceApiService:
                         "last_power": None,
                         "last_voltage": None,
                         "last_current": None,
-                        "first_energy": None,
-                        "last_energy": None,
                     },
                 )
             )
 
         # Step 3: 遍历读数，按时间差定位桶下标并记录最新读数/能量边界
+        prev_energy: Decimal | None = baseline_energy
         for reading in readings:
             ts = cls._ensure_utc(reading["ts"])
             delta = ts - start
@@ -295,9 +343,11 @@ class DeviceApiService:
             bucket_stats["last_voltage"] = float(reading.get("voltage") or 0.0)
             bucket_stats["last_current"] = float(reading.get("current") or 0.0)
             energy_value = Decimal(reading.get("energy_kwh") or 0)
-            if bucket_stats["first_energy"] is None:
-                bucket_stats["first_energy"] = energy_value
-            bucket_stats["last_energy"] = energy_value
+            if prev_energy is not None:
+                delta_energy = energy_value - prev_energy
+                if delta_energy >= 0:
+                    bucket_stats["energy"] += float(delta_energy)
+            prev_energy = energy_value
 
         # Step 4: 生成最终点位数据，瞬时值取桶内最新读数，energy 取最后-最初
         for _, stats in buckets:
@@ -306,13 +356,6 @@ class DeviceApiService:
                 stats["power"] = float(stats.get("last_power") or 0.0)
                 stats["voltage"] = float(stats.get("last_voltage") or 0.0)
                 stats["current"] = float(stats.get("last_current") or 0.0)
-                first_energy = stats.get("first_energy")
-                last_energy = stats.get("last_energy")
-                if first_energy is None or last_energy is None:
-                    stats["energy"] = 0.0
-                else:
-                    delta_energy = last_energy - first_energy
-                    stats["energy"] = float(delta_energy) if delta_energy >= 0 else 0.0
             else:
                 stats["power"] = stats["voltage"] = stats["current"] = stats["energy"] = 0.0
         return buckets
@@ -330,33 +373,53 @@ class DeviceApiService:
     ) -> List[tuple[datetime, Dict[str, float | int]]]:
         start_epoch = int(start_utc.replace(tzinfo=timezone.utc).timestamp())
         sql = """
-        WITH raw AS (
+        WITH baseline AS (
+            SELECT ts, energy_kwh, power, voltage, current
+            FROM reading
+            WHERE device_id = %(device_id)s AND ts < %(start_utc)s
+            ORDER BY ts DESC
+            LIMIT 1
+        ),
+        windowed AS (
+            SELECT ts, energy_kwh, power, voltage, current
+            FROM reading
+            WHERE device_id = %(device_id)s AND ts >= %(start_utc)s AND ts <= %(end_utc)s
+        ),
+        all_readings AS (
+            SELECT * FROM baseline
+            UNION ALL
+            SELECT * FROM windowed
+        ),
+        with_lag AS (
             SELECT
-                floor((extract(epoch FROM ts) - %(start_epoch)s) / %(bucket_seconds)s)::bigint AS bucket_index,
                 ts,
                 energy_kwh,
                 power,
                 voltage,
                 current,
-                row_number() OVER (
-                    PARTITION BY floor((extract(epoch FROM ts) - %(start_epoch)s) / %(bucket_seconds)s)
-                    ORDER BY ts ASC
-                ) AS rn_asc,
+                LAG(energy_kwh) OVER (ORDER BY ts) AS prev_energy,
+                floor((extract(epoch FROM ts) - %(start_epoch)s) / %(bucket_seconds)s)::bigint AS bucket_index,
                 row_number() OVER (
                     PARTITION BY floor((extract(epoch FROM ts) - %(start_epoch)s) / %(bucket_seconds)s)
                     ORDER BY ts DESC
                 ) AS rn_desc
-            FROM reading
-            WHERE device_id = %(device_id)s AND ts >= %(start_utc)s AND ts <= %(end_utc)s
+            FROM all_readings
         )
         SELECT
             bucket_index,
-            MIN(energy_kwh) FILTER (WHERE rn_asc = 1) AS first_energy,
-            MAX(energy_kwh) FILTER (WHERE rn_desc = 1) AS last_energy,
-            MAX(power) FILTER (WHERE rn_desc = 1) AS last_power,
-            MAX(voltage) FILTER (WHERE rn_desc = 1) AS last_voltage,
-            MAX(current) FILTER (WHERE rn_desc = 1) AS last_current
-        FROM raw
+            COUNT(*) FILTER (WHERE ts >= %(start_utc)s) AS count,
+            MAX(power) FILTER (WHERE rn_desc = 1 AND ts >= %(start_utc)s) AS last_power,
+            MAX(voltage) FILTER (WHERE rn_desc = 1 AND ts >= %(start_utc)s) AS last_voltage,
+            MAX(current) FILTER (WHERE rn_desc = 1 AND ts >= %(start_utc)s) AS last_current,
+            SUM(
+                CASE
+                    WHEN ts < %(start_utc)s THEN 0
+                    WHEN prev_energy IS NULL THEN 0
+                    WHEN energy_kwh >= prev_energy THEN energy_kwh - prev_energy
+                    ELSE 0
+                END
+            ) AS energy
+        FROM with_lag
         WHERE bucket_index >= 0 AND bucket_index < %(bucket_count)s
         GROUP BY bucket_index
         ORDER BY bucket_index;
@@ -378,16 +441,11 @@ class DeviceApiService:
                 continue
             bucket_idx = int(idx)
             stats = cls._empty_bucket_stats()
-            stats["count"] = 1
+            stats["count"] = int(row.get("count") or 0)
             stats["power"] = float(row.get("last_power") or 0.0)
             stats["voltage"] = float(row.get("last_voltage") or 0.0)
             stats["current"] = float(row.get("last_current") or 0.0)
-            first_energy = row.get("first_energy")
-            last_energy = row.get("last_energy")
-            if first_energy is not None and last_energy is not None:
-                delta = Decimal(last_energy) - Decimal(first_energy)
-                if delta >= 0:
-                    stats["energy"] = float(delta)
+            stats["energy"] = float(row.get("energy") or 0.0)
             bucket_map[bucket_idx] = stats
 
         buckets: List[tuple[datetime, Dict[str, float | int]]] = []

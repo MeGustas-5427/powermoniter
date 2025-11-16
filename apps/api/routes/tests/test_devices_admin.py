@@ -12,7 +12,6 @@ from apps.repositories.models import DeviceStatus, IngressType, User
 from apps.services.auth_service import JWT_ALGORITHM
 
 
-@override_settings(ROOT_URLCONF="apps.api.routes.tests.urls")
 class DeviceAdminRoutesTests(TestCase):
     """Django tests for /v1/device-admin/macs endpoints."""
 
@@ -28,7 +27,7 @@ class DeviceAdminRoutesTests(TestCase):
             new=AsyncMock(),
         ) as mocked_apply:
             response = self.client.post(
-                "/v1/device-admin/macs",
+                "/api/v1/device-admin/macs",
                 data=json.dumps(payload),
                 content_type="application/json",
                 **self._auth_headers(),
@@ -44,7 +43,7 @@ class DeviceAdminRoutesTests(TestCase):
         self._post_device(payload)
 
         response = self.client.post(
-            "/v1/device-admin/macs",
+            "/api/v1/device-admin/macs",
             data=json.dumps(payload),
             content_type="application/json",
             **self._auth_headers(),
@@ -58,7 +57,7 @@ class DeviceAdminRoutesTests(TestCase):
         self._post_device(self._build_device_payload(mac="cc0000000004", status=DeviceStatus.DISABLED.value))
 
         response = self.client.get(
-            "/v1/device-admin/macs",
+            "/api/v1/device-admin/macs",
             {"status": DeviceStatus.ENABLED.value},
             **self._auth_headers(),
         )
@@ -77,7 +76,7 @@ class DeviceAdminRoutesTests(TestCase):
             new=AsyncMock(),
         ) as mocked_apply:
             response = self.client.patch(
-                f"/v1/device-admin/macs/{mac}",
+                f"/api/v1/device-admin/macs/{mac}",
                 data=json.dumps({"description": "updated", "collect_enabled": True}),
                 content_type="application/json",
                 **self._auth_headers(),
@@ -89,7 +88,7 @@ class DeviceAdminRoutesTests(TestCase):
 
     def test_update_device_not_found(self) -> None:
         response = self.client.patch(
-            "/v1/device-admin/macs/ff0000000000",
+            "/api/v1/device-admin/macs/ff0000000000",
             data=json.dumps({"description": "missing"}),
             content_type="application/json",
             **self._auth_headers(),
@@ -99,7 +98,7 @@ class DeviceAdminRoutesTests(TestCase):
         self.assertEqual(response.json()["error_code"], "DEVICE_NOT_FOUND")
 
     def test_requires_authorization(self) -> None:
-        response = self.client.get("/v1/device-admin/macs")
+        response = self.client.get("/api/v1/device-admin/macs")
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json().get("detail"), "Unauthorized")
 
@@ -149,7 +148,7 @@ class DeviceAdminRoutesTests(TestCase):
             new=AsyncMock(),
         ):
             response = self.client.post(
-                "/v1/device-admin/macs",
+                "/api/v1/device-admin/macs",
                 data=json.dumps(payload),
                 content_type="application/json",
                 **self._auth_headers(),

@@ -12,7 +12,6 @@ from apps.repositories.models import Device, DeviceStatus, IngressType, Reading,
 from apps.services.auth_service import JWT_ALGORITHM
 
 
-@override_settings(ROOT_URLCONF="apps.api.routes.tests.urls")
 class DeviceApiListTests(TestCase):
     """覆盖 /v1/devices list_devices API 的 Django 测试。"""
 
@@ -34,7 +33,7 @@ class DeviceApiListTests(TestCase):
 
         with patch("apps.api.routes.device_api.DeviceApiService._now", return_value=self.fixed_now):
             response = self.client.get(
-                "/v1/devices",
+                "/api/v1/devices",
                 {"status": "online", "page": 1, "page_size": 2},
                 **self._auth_headers(self.user),
             )
@@ -55,7 +54,7 @@ class DeviceApiListTests(TestCase):
 
     def test_list_devices_returns_empty_when_user_has_no_devices(self) -> None:
         lone_user = User.objects.create(username="bob", password="!", password_hash="!")
-        response = self.client.get("/v1/devices", **self._auth_headers(lone_user))
+        response = self.client.get("/api/v1/devices", **self._auth_headers(lone_user))
 
         self.assertEqual(response.status_code, 200)
         data = response.json()["data"]
@@ -63,7 +62,7 @@ class DeviceApiListTests(TestCase):
         self.assertEqual(data["items"], [])
 
     def test_list_devices_requires_authorization_header(self) -> None:
-        response = self.client.get("/v1/devices")
+        response = self.client.get("/api/v1/devices")
 
         self.assertEqual(response.status_code, 401)
         body = response.json()
@@ -71,7 +70,7 @@ class DeviceApiListTests(TestCase):
 
     def test_list_devices_rejects_page_size_above_limit(self) -> None:
         response = self.client.get(
-            "/v1/devices",
+            "/api/v1/devices",
             {"page_size": 200},
             **self._auth_headers(self.user),
         )
@@ -82,7 +81,7 @@ class DeviceApiListTests(TestCase):
 
     def test_list_devices_rejects_invalid_status_value(self) -> None:
         response = self.client.get(
-            "/v1/devices",
+            "/api/v1/devices",
             {"status": "oops"},
             **self._auth_headers(self.user),
         )
