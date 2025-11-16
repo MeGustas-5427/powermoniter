@@ -39,6 +39,10 @@ class DeviceStatus(IntEnum):
         names = {cls.ENABLED: 'enabled', cls.DISABLED: 'disabled'}
         return [(member.value, names[member]) for member in cls]
 
+    @classmethod
+    def select(cls, value):
+        return dict(cls.choices()).get(value)
+
 
 class IngressType(IntEnum):
     """采集入口类型。"""
@@ -49,6 +53,10 @@ class IngressType(IntEnum):
     def choices(cls):
         names = {cls.MQTT: 'mqtt', cls.TCP: 'tcp'}
         return [(member.value, names[member]) for member in cls]
+
+    @classmethod
+    def select(cls):
+        return dict(cls.choices())
 
 
 class User(AbstractBaseUser):
