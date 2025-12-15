@@ -1,7 +1,7 @@
 services:
   caddy:
     image: caddy
-    ports: ["80:80","443:443", "8000:8000"]
+    ports: ["80:80","443:443", "8000:8000", "9000:9000"]
     networks: ["edge"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
