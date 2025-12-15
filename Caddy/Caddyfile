@@ -2,7 +2,7 @@
     auto_https off
 }
 
-:80,:9000 {
+:80 {
     # 静态文件处理
     handle /static/* {
         uri strip_prefix /static
