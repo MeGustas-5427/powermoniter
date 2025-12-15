@@ -47,9 +47,9 @@ DEBUG = get_bool_env('DEBUG', False)
 # 从环境变量读取ALLOWED_HOSTS，如果没有则使用默认值
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else [
     # mengdie.ai 域名系列
-    # 'mengdie.ai',
+    'mengdie.info',
     # 'www.mengdie.ai',
-    # 'api.mengdie.ai',
+    'api.mengdie.info',
 
     # 本地开发
     'localhost',
@@ -248,6 +248,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://81.68.79.234",
     "http://localhost:5173",
+    "https://api.mengdie.info",
+    "https://mengdie.info",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -258,6 +260,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://81.68.79.234",
     "http://localhost:5173",
+    "https://api.mengdie.info",
+    "https://mengdie.info",
 ]
 
 # API接口CSRF豁免URL模式
