@@ -97,7 +97,7 @@ RUN chown -R django:django /app
 RUN python3 manage.py collectstatic --noinput || true
 
 # 暴露端口
-EXPOSE 8000
+EXPOSE 9000
 
 # 启动命令
 # https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/uvicorn/

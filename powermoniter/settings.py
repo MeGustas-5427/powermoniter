@@ -231,6 +231,8 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_DIRS[0].mkdir(parents=True, exist_ok=True)     # 若 static 目录不存在则自动创建
+
 
 # Media files
 MEDIA_URL = '/media/'
@@ -296,6 +298,12 @@ USE_X_FORWARDED_PORT = True
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 # 日志设置
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)     # 若 logs 目录不存在则自动创建
+
+DJANGO_LOG_FILE = LOG_DIR / "django.log"
+DJANGO_LOG_FILE.touch(exist_ok=True)           # 保证日志文件存在（不会覆盖已有内容）
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
