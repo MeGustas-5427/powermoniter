@@ -251,6 +251,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://81.68.79.234",
     "http://47.237.84.36",
     "http://localhost:5173",
+    "https://mengdie.info",
     "https://api.mengdie.info",
     "https://9aeae6d4.powermoniter-frontend.pages.dev",
 ]
@@ -266,6 +267,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://81.68.79.234",
     "http://47.237.84.36",
     "http://localhost:5173",
+    "https://mengdie.info",
     "https://api.mengdie.info",
     "https://9aeae6d4.powermoniter-frontend.pages.dev",
 ]
