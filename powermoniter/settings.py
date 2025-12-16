@@ -58,7 +58,7 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get
 
     # 服务器IP
     '81.68.79.234',
-    '45.76.151.54',
+    '47.237.84.36',
 ]
 
 
@@ -246,10 +246,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:9000",
+    "http://127.0.0.1:9000",
     "http://81.68.79.234",
+    "http://47.237.84.36",
     "http://localhost:5173",
     "https://api.mengdie.info",
-    "https://mengdie.info",
+    "https://9aeae6d4.powermoniter-frontend.pages.dev",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -258,10 +261,13 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:9000",
+    "http://127.0.0.1:9000",
     "http://81.68.79.234",
+    "http://47.237.84.36",
     "http://localhost:5173",
     "https://api.mengdie.info",
-    "https://mengdie.info",
+    "https://9aeae6d4.powermoniter-frontend.pages.dev",
 ]
 
 # API接口CSRF豁免URL模式

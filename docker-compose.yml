@@ -20,7 +20,7 @@ services:
       - ./logs:/app/logs
     environment:
       - DEBUG=False
-      - ALLOWED_HOSTS=api.mengdie.info,localhost,127.0.0.1,0.0.0.0,81.68.79.234
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,81.68.79.234,47.237.84.36
     logging:
       driver: json-file
       options:
