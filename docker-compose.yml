@@ -12,7 +12,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     expose:
-      - "8000"    # 只在 Docker 网络内部暴露
+      - "9000"    # 只在 Docker 网络内部暴露
     volumes:
       - .:/app
       - ./staticfiles:/app/staticfiles
