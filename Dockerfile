@@ -101,4 +101,4 @@ EXPOSE 8000
 
 # 启动命令
 # https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/uvicorn/
-CMD ["uvicorn", "--host", "0.0.0.0", "--port", "8000", "powermoniter.asgi:application"]
+CMD ["uvicorn", "--host", "0.0.0.0", "--port", "9000", "powermoniter.asgi:application"]
