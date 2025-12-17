@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from apps.repositories.models import Device, DeviceStatus
+from apps.repositories.models import Device, DeviceStatus, IngressType
 from apps.telemetry.metrics import (
     DUPLICATE_COUNTER,
     DEAD_LETTER_COUNTER,
@@ -49,7 +49,7 @@ class SubscriberRegistry:
         async with self._lock:
             self._records[device.mac] = SubscriberRecord(device=device)
             set_active_subscribers(len(self._records))
-        logger.info(f"订阅已激活: {device.mac}-{device.ingress_type}")
+        logger.info(f"订阅已激活: {device.mac}-{IngressType.select().get(device.ingress_type)}")
 
     async def deactivate(self, device: Device) -> None:
         """停用设备订阅。"""

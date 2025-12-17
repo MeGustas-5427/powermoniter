@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
+from django.db import close_old_connections, connections
+from django.db.utils import OperationalError
 
 from apps.repositories.models import DeadLetter, Device
 
@@ -24,14 +26,27 @@ class DeadLetterRepository:
         meta: Optional[Dict[str, Any]] = None,
     ) -> DeadLetter:
         def _create() -> DeadLetter:
-            return DeadLetter.objects.create(
-                device=device,
-                mac=mac,
-                raw_payload=raw_payload,
-                failure_reason=reason,
-                retryable=retryable,
-                meta=meta,
-            )
+            close_old_connections()
+            try:
+                return DeadLetter.objects.create(
+                    device=device,
+                    mac=mac,
+                    raw_payload=raw_payload,
+                    failure_reason=reason,
+                    retryable=retryable,
+                    meta=meta,
+                )
+            except OperationalError:
+                connections["default"].close()
+                close_old_connections()
+                return DeadLetter.objects.create(
+                    device=device,
+                    mac=mac,
+                    raw_payload=raw_payload,
+                    failure_reason=reason,
+                    retryable=retryable,
+                    meta=meta,
+                )
 
         # 避免使用 acreate()，直接将同步 ORM 操作丢到线程池，防止 CurrentThreadExecutor 缺失。
         return await sync_to_async(_create, thread_sensitive=False)()

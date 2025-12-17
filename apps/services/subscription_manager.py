@@ -13,6 +13,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Dict, Optional, Union, List
 
 from asgiref.sync import sync_to_async
+from django.db import close_old_connections, connections
+from django.db.utils import OperationalError
 
 from apps.adapters.base import Envelope, SubscriberAdapter
 from apps.adapters.mqtt_adapter import MQTTAdapter
@@ -136,7 +138,16 @@ class SubscriptionManager:
             # 不能使用 device.arefresh_from_db()，否则会依赖当前线程的 CurrentThreadExecutor，
             # 在 admin 中通过 async_to_sync 调用时 executor 已经关闭会抛 RuntimeError。
             # 改用 sync_to_async + thread_sensitive=False 让刷新操作跑在独立线程池里，避免阻塞和崩溃。
-            await sync_to_async(device.refresh_from_db, thread_sensitive=False)()
+            def _refresh_device() -> None:
+                close_old_connections()
+                try:
+                    device.refresh_from_db()
+                except OperationalError:
+                    connections["default"].close()
+                    close_old_connections()
+                    device.refresh_from_db()
+
+            await sync_to_async(_refresh_device, thread_sensitive=False)()
             if not self._should_collect(device):
                 return
             try:

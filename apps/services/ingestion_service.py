@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from asgiref.sync import sync_to_async
+from django.db import close_old_connections, connections
+from django.db.utils import OperationalError
 from apps.repositories.models import Device, DeadLetter, Reading
 from apps.repositories.dead_letter_repository import DeadLetterRepository
 from apps.subscribers.registry import registry as subscribers_registry
@@ -37,7 +39,13 @@ async def record_reading(
     payload_hash = _hash_payload(payload)
 
     def _reading_exists() -> bool:
-        return Reading.objects.filter(mac=device.mac, ts=ts, payload_hash=payload_hash).exists()
+        close_old_connections()
+        try:
+            return Reading.objects.filter(mac=device.mac, ts=ts, payload_hash=payload_hash).exists()
+        except OperationalError:
+            connections["default"].close()
+            close_old_connections()
+            return Reading.objects.filter(mac=device.mac, ts=ts, payload_hash=payload_hash).exists()
 
     # 不能直接使用 QuerySet.aexists()/acreate()，否则会依赖当前线程的 CurrentThreadExecutor。
     # 在采集任务这类自维护事件循环的线程里 executor 并不存在，会抛 RuntimeError。
@@ -48,18 +56,35 @@ async def record_reading(
         return
 
     def _create_reading() -> Reading:
-        return Reading.objects.create(
-            device=device,
-            mac=device.mac,
-            ts=ts,
-            energy_kwh=energy_kwh,
-            power=power,
-            voltage=voltage,
-            current=current,
-            key=key,
-            payload=payload,
-            payload_hash=payload_hash,
-        )
+        close_old_connections()
+        try:
+            return Reading.objects.create(
+                device=device,
+                mac=device.mac,
+                ts=ts,
+                energy_kwh=energy_kwh,
+                power=power,
+                voltage=voltage,
+                current=current,
+                key=key,
+                payload=payload,
+                payload_hash=payload_hash,
+            )
+        except OperationalError:
+            connections["default"].close()
+            close_old_connections()
+            return Reading.objects.create(
+                device=device,
+                mac=device.mac,
+                ts=ts,
+                energy_kwh=energy_kwh,
+                power=power,
+                voltage=voltage,
+                current=current,
+                key=key,
+                payload=payload,
+                payload_hash=payload_hash,
+            )
 
     await sync_to_async(_create_reading, thread_sensitive=False)()
 

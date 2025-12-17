@@ -45,7 +45,6 @@ class DeviceApiElectricityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        print(body)
         a = {
             'success': True,
             'data': {
