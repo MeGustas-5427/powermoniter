@@ -102,6 +102,94 @@ class DeviceAdminRoutesTests(TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json().get("detail"), "Unauthorized")
 
+
+
+    def test_publish_device_success(self) -> None:
+        mac = "cc0000000010"
+        self._post_device(self._build_device_payload(mac=mac))
+        payload = {"timerEnable": 1, "timerInterval": 300}
+
+        with patch(
+            "apps.api.routes.devices.MQTTPublishService.publish_settings",
+            new=AsyncMock(),
+        ) as mocked_publish:
+            response = self.client.post(
+                f"/api/v1/device-admin/macs/{mac}/publish",
+                data=json.dumps(payload),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        mocked_publish.assert_awaited()
+
+    def test_publish_device_not_found(self) -> None:
+        payload = {"timerEnable": 1, "timerInterval": 300}
+
+        response = self.client.post(
+            "/api/v1/device-admin/macs/ff0000000011/publish",
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error_code"], "DEVICE_NOT_FOUND")
+
+    def test_publish_device_invalid_config(self) -> None:
+        mac = "cc0000000012"
+        self._post_device(self._build_device_payload(mac=mac))
+        payload = {"timerEnable": 1, "timerInterval": 300}
+
+        with patch(
+            "apps.api.routes.devices.MQTTPublishService.publish_settings",
+            new=AsyncMock(side_effect=ValueError("missing config")),
+        ):
+            response = self.client.post(
+                f"/api/v1/device-admin/macs/{mac}/publish",
+                data=json.dumps(payload),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error_code"], "INVALID_MQTT_CONFIG")
+
+
+    def test_publish_device_invalid_payload(self) -> None:
+        mac = "cc0000000014"
+        self._post_device(self._build_device_payload(mac=mac))
+        payload = {"timerEnable": 1, "timerInterval": 1}
+
+        response = self.client.post(
+            f"/api/v1/device-admin/macs/{mac}/publish",
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_publish_device_unavailable(self) -> None:
+        mac = "cc0000000013"
+        self._post_device(self._build_device_payload(mac=mac))
+        payload = {"timerEnable": 1, "timerInterval": 300}
+
+        with patch(
+            "apps.api.routes.devices.MQTTPublishService.publish_settings",
+            new=AsyncMock(side_effect=ConnectionError("mqtt down")),
+        ):
+            response = self.client.post(
+                f"/api/v1/device-admin/macs/{mac}/publish",
+                data=json.dumps(payload),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["error_code"], "MQTT_UNAVAILABLE")
+
     # Helpers -----------------------------------------------------------------
 
     def _auth_headers(self) -> dict[str, str]:

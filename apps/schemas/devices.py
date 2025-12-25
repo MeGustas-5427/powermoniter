@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import Field, field_validator
 from ninja import Schema
@@ -44,6 +44,13 @@ class DeviceUpdate(Schema):
     description: Optional[str] = Field(None, max_length=255)
 
 
+class DevicePublishPayload(Schema):
+    """MQTT publish payload for device settings."""
+
+    timerEnable: int = Field(..., ge=0, le=1, description="Enable timer reporting (0/1)")
+    timerInterval: int = Field(..., ge=5, le=86400, description="Timer interval seconds (5-86400)")
+
+
 class DeviceResponse(DeviceBase):
     """设备响应结构。"""
 
@@ -69,3 +76,7 @@ class DeviceListResponse(Schema):
     page: int = 1
     page_size: int = Field(default=50, ge=1, le=200)
     total: int
+
+class DevicePublishResponse(Schema):
+    success: Literal[True] = True
+

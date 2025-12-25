@@ -17,10 +17,11 @@ from django.db import close_old_connections, connections
 from django.db.utils import OperationalError
 
 from apps.adapters.base import Envelope, SubscriberAdapter
-from apps.adapters.mqtt_adapter import MQTTAdapter
+from apps.adapters.mqtt_adapter import MQTTAdapter, mqtt_pool
 from apps.adapters.tcp_adapter import TCPAdapter
 from apps.repositories.models import Device, DeviceStatus, IngressType
 from apps.services.ingestion_service import record_dead_letter, record_reading
+from apps.services.mqtt_config import build_broker_url, resolve_mqtt_config
 from apps.subscribers.registry import registry as subscriber_registry
 from apps.subscribers.retry import RetryPolicy
 
@@ -37,23 +38,15 @@ class AdapterFactory:
         raise ValueError(f"未知的采集类型: {device.ingress_type}")
 
     def _create_mqtt_adapter(self, device: Device) -> SubscriberAdapter:
-        broker = getattr(device, "broker", None) or device.ingress_config.get("broker")
-        port = getattr(device, "port", None) or device.ingress_config.get("port")
-        topic = getattr(device, "sub_topic", None) or device.ingress_config.get("topic")
-        if not broker or port is None or not topic:
+        config = resolve_mqtt_config(device)
+        if not config.sub_topic:
             raise ValueError("MQTT 配置缺失 broker/port/topic")
-
-        username = getattr(device, "username", "") or ""
-        password = getattr(device, "password", "") or ""
-        auth = ""
-        if username:
-            auth = f"{username}:{password}@"
-        broker_url = f"mqtt://{auth}{broker}:{port}"
-        client_id = getattr(device, "client_id", None) or device.ingress_config.get("client_id")
+        broker_url = build_broker_url(config)
+        client_id = config.client_id
 
         return MQTTAdapter(
             broker_url=broker_url,
-            topic=topic,
+            topic=config.sub_topic,
             mac=device.mac,
             client_id=client_id or None,
         )
@@ -97,6 +90,7 @@ class SubscriptionManager:
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
+        await mqtt_pool.close_all()
         logger.info("采集管理器已停止所有任务")
 
     async def apply_device(self, device: Device) -> None:
@@ -260,3 +254,4 @@ class SubscriptionManager:
 subscription_manager = SubscriptionManager()
 
 __all__ = ["subscription_manager", "SubscriptionManager"]
+

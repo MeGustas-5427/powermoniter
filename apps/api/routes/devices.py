@@ -17,10 +17,13 @@ from apps.repositories.models import DeviceStatus
 from apps.schemas.devices import (
     DeviceCreate,
     DeviceListResponse,
+    DevicePublishPayload,
+    DevicePublishResponse,
     DeviceResponse,
     DeviceUpdate,
 )
 from apps.services.subscription_manager import subscription_manager
+from apps.services.mqtt_publish_service import MQTTPublishService
 from apps.telemetry.metrics import observe_device_api
 
 router = Router(tags=["Device Admin"], auth=JWTAuth())
@@ -178,6 +181,68 @@ async def update_device(
         )
 
 
+@router.post(
+    "/macs/{mac}/publish",
+    response=DevicePublishResponse,
+    summary="Publish device settings",
+)
+async def publish_device_settings(
+    request: HttpRequest,
+    mac: str,
+    payload: DevicePublishPayload,
+) -> DevicePublishResponse:
+    """Publish device settings to MQTT."""
+
+    status_label = "success"
+    started = perf_counter()
+    try:
+        _require_auth(request)
+        device = await _repository.get_by_mac(_normalize_mac(mac))
+        if device is None:
+            status_label = "DEVICE_NOT_FOUND"
+            raise ApiError(
+                "DEVICE_NOT_FOUND",
+                "specified device does not exist",
+                HTTPStatus.NOT_FOUND,
+            )
+
+        try:
+            payload_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+            await MQTTPublishService.publish_settings(device, payload_data)
+        except ValueError as exc:
+            status_label = "INVALID_MQTT_CONFIG"
+            raise ApiError(
+                "INVALID_MQTT_CONFIG",
+                str(exc),
+                HTTPStatus.BAD_REQUEST,
+            ) from exc
+        except ConnectionError as exc:
+            status_label = "MQTT_UNAVAILABLE"
+            raise ApiError(
+                "MQTT_UNAVAILABLE",
+                "mqtt publish failed",
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            ) from exc
+
+        return DevicePublishResponse()
+    except ApiError as exc:
+        status_label = exc.error_code
+        raise
+    except Exception as exc:  # pragma: no cover
+        status_label = "INTERNAL_ERROR"
+        raise ApiError(
+            "INTERNAL_ERROR",
+            "unexpected server error",
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        ) from exc
+    finally:
+        observe_device_api(
+            "device_admin_publish",
+            status_label,
+            perf_counter() - started,
+        )
+
 __all__ = ["router"]
+
 def _normalize_mac(value: str) -> str:
     return value.strip().upper()

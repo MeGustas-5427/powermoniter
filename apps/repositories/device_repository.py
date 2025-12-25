@@ -59,7 +59,7 @@ class DeviceRepository:
     @staticmethod
     async def get_by_mac(mac: str) -> Optional[Device]:
         try:
-            await Device.objects.aget(mac=mac)
+            return await Device.objects.aget(mac=mac)
         except Device.DoesNotExist:
             return None
 
